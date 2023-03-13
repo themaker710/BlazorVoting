@@ -1,0 +1,197 @@
+﻿@page "/response"
+@inject NavigationManager Navigation
+@implements IAsyncDisposable
+@using Microsoft.AspNetCore.SignalR.Client;
+@using PollAppHosted.Shared;
+
+<PageTitle>Respond to Polls</PageTitle>
+
+<MudText Typo="Typo.h3" GutterBottom="true">Polling</MudText>
+<MudText Class="mb-8">Respond to polls from this page.</MudText>
+<MudDivider />
+
+@if (!IsConnected)
+{
+    <MudCard>
+        <MudCardContent>
+            <MudForm @bind-IsValid="@success">
+                <MudTextField Class="inline" T="int" @bind-Value="@scode" Label="Session Code" HelperText="4 Digit Number" Required="true" OnlyValidateIfDirty="true" Validation="@(new Func<int, IEnumerable<string>>(SessionCodeForm))" />
+                <MudTextField Class="inline" T="string" @bind-Value="@uname" Label="Name" HelperText="Optional" />
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(!success)" @onclick="@(async () => await JoinSession())" Class="ml-auto inline">Join</MudButton>
+                @*                <MudButton Disabled="@((_processing) ? _processing : !success)" OnClick="ProcessSomething" Variant="Variant.Filled" Color="Color.Primary">
+            @if (_processing)
+            {
+            <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+            <MudText Class="ms-2">Connecting</MudText>
+            }
+            else
+            {
+            <MudText>Join Session</MudText>
+            }
+            </MudButton>*@
+            </MudForm>
+        </MudCardContent>
+    </MudCard>
+}
+@if (IsConnected)
+{
+
+    //Align a button and Header in same line
+    <MudCard>
+        <MudCardHeader>
+            <CardHeaderContent>
+                <MudText Typo="Typo.h4" GutterBottom="true">Test</MudText>
+            </CardHeaderContent>
+            <CardHeaderActions>
+                <MudButton Variant="Variant.Filled" Color="Color.Error" @onclick="@LeaveSession" Class="ml-auto inline">Disconnect</MudButton>
+            </CardHeaderActions>
+        </MudCardHeader>
+        <MudCardContent>
+            <MudText>Session open since @session.CreationDate.ToString("t") | Connected since @connectionTime.ToString("t") | Session ID <b>@session.ID</b></MudText>
+            @if (showConfirmation)
+            {
+                <MudAlert Severity="Severity.Info" ShowCloseIcon="true" CloseIconClicked="(() => CloseConfirmation())">You are connected to session @session.ID</MudAlert>
+            }
+
+        </MudCardContent>
+    </MudCard>
+
+    <MudDivider />
+
+    @if (IsActivePoll)
+    {
+        //Poll display here
+        <MudCard>
+            <MudCardHeader>
+                <CardHeaderContent>
+                    <MudText Typo="Typo.h5" GutterBottom="true">@activePoll.Question</MudText>
+                </CardHeaderContent>
+            </MudCardHeader>
+            <MudCardContent>
+                <MudGrid Justify="Justify.Center">
+                    @foreach (Poll.PollOption option in activePoll.Options)
+                    {
+                        <MudItem Width="auto" Height="140px">
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" @onclick="async () => await Vote(option.ID)">@option.Name</MudButton>
+                        </MudItem>
+                    }
+                </MudGrid>
+
+                <MudText>Options: @activePoll.Options</MudText>
+            </MudCardContent>
+        </MudCard>
+    }
+    else 
+    {
+        <MudAlert Severity="Severity.Normal">No active poll. You will be notified when a new poll becomes avaliable.</MudAlert>
+    }
+
+}
+
+
+
+
+
+
+@code {
+
+    private HubConnection? hubConnection;
+    private List<string> messages = new List<string>();
+    private string? userInput;
+    private string? messageInput;
+    private DateTime connectionTime;
+
+    bool success, showConfirmation, IsConnected, IsActivePoll, HasVoted;
+
+    SessionInfo session = new SessionInfo();
+
+    string uname;
+    int scode;
+
+    Poll activePoll;
+
+    void CloseConfirmation() => showConfirmation = false;
+
+
+    private IEnumerable<string> SessionCodeForm(int code)
+    {
+        if (code.ToString().Length != 4)
+            yield return "Code must have 4 digits between 0-9";
+
+    }
+
+    void BeginSession()
+    {
+        if (session.IsEmpty) return;
+
+        Console.WriteLine("The code is: " + scode);
+        Console.WriteLine("The username is: " + uname);
+
+        showConfirmation = true;
+        IsConnected = true;
+
+        connectionTime = new DateTime();
+    }
+
+    async Task Vote(int id)
+    {
+        if (hubConnection is not null)
+        {
+            await hubConnection.SendAsync("Vote", id);
+            HasVoted = true;
+        }
+    }
+
+    void LeaveSession()
+    {
+
+        IsConnected = false;
+        scode = 0;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl(Navigation.ToAbsoluteUri("/poll"))
+            .Build();
+        //Add all recieving methods here
+        hubConnection.On<string>("ReceiveMessage", (msg) =>
+        {
+            Snackbar.Add(msg, Severity.Info);
+        });
+
+        //Recieve poll from hub and display it
+        hubConnection.On<Poll>("ReceivePoll", (poll) =>
+                { });
+
+        //Recieve poll from hub and display it
+        hubConnection.On<Session, string>("ReceiveSession", (sessionSV, msg) =>
+        {
+            Snackbar.Add(msg, (sessionSV == null) ? Severity.Error : Severity.Normal);
+            session = sessionSV;
+            BeginSession();
+        });
+
+        await hubConnection.StartAsync();
+    }
+
+    private async Task JoinSession()
+    {
+        if (hubConnection is not null)
+        {
+            await hubConnection.SendAsync("JoinSession", scode, uname, "voter");
+            IsConnected = true;
+        }
+    }
+
+    //public bool IsConnected =>
+    //    hubConnection?.State == HubConnectionState.Connected;
+
+    public async ValueTask DisposeAsync()
+    {
+        if (hubConnection is not null)
+        {
+            await hubConnection.DisposeAsync();
+        }
+    }
+}
