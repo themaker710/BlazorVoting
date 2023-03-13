@@ -25,16 +25,15 @@ namespace PollAppHosted.Server.Hubs
             //Create a unique session ID
             int sessionID = 0;
             bool uniqueID = false;
-            //while (!uniqueID)
-            //{
-            //    sessionID = new Random().Next(1000, 9999);
-            //    if (!sessionsDict.ContainsKey(sessionID))
-            //        uniqueID = true;
-            //}
-            sessionID = 1111;
+            while (!uniqueID)
+            {
+                sessionID = new Random().Next(1000, 9999);
+                if (!sessionsDict.ContainsKey(sessionID))
+                    uniqueID = true;
+            }
 
             //Create new session
-            Session newSession = new Session { ID = sessionID, SessionName = sessionName, IsActive = false, creationTime = DateTime.Now, users = new List<UserSessionRecord>(), PollResults = new List<PollResult>()};
+            Session newSession = new() { ID = sessionID, Name = sessionName, IsActive = false, creationTime = DateTime.Now, users = new List<UserSessionRecord>(), PollResults = new List<PollResult>()};
             newSession.users.Add(new UserSessionRecord { UserID = userID, UserName = username, joinTime = DateTime.Now, Role = "admin" });
             sessions.Add(newSession);
             UpdateSessions();
@@ -42,7 +41,7 @@ namespace PollAppHosted.Server.Hubs
             await Groups.AddToGroupAsync(Context.ConnectionId, newSession.ID.ToString());
 
             //Send caller session ID
-            await Clients.Caller.SendAsync("RecieveSession", newSession, $"Session succesfully created with code {newSession.ID}");
+            await Clients.Caller.SendAsync("ReceiveSession", newSession, $"Session succesfully created with code {newSession.ID}");
         }
         //Leave a session
         public async Task LeaveSession(int sessionID)
@@ -90,7 +89,7 @@ namespace PollAppHosted.Server.Hubs
                     if (!sessions[sessionIndex].IsActive)
                     {
                         //Send response to caller
-                        await Clients.Caller.SendAsync("ReceiveMessage", $"You have been successfully registered for the inactive {sessions[sessionIndex].SessionName} session. You will be notified when the session becomes active.");
+                        await Clients.Caller.SendAsync("ReceiveMessage", $"You have been successfully registered for the inactive {sessions[sessionIndex].Name} session. You will be notified when the session becomes active.");
                     }
                     //Add user to session and group
                     await Groups.AddToGroupAsync(Context.ConnectionId, sessionID.ToString());
@@ -107,10 +106,10 @@ namespace PollAppHosted.Server.Hubs
             else
             {
                 //Send response to caller indicating session does not exist
-                await Clients.Caller.SendAsync("RecieveSession", null, "Session does not exist. Check your sesssion code");
+                await Clients.Caller.SendAsync("ReceiveSession", null, "Session does not exist. Check your sesssion code");
                 return;
             }
-            await Clients.Caller.SendAsync("RecieveSession", sessions[sessionIndex], "Session connection successful");
+            await Clients.Caller.SendAsync("ReceiveSession", sessions[sessionIndex], "Session connection successful");
         }
         
         public void UpdateSessions()

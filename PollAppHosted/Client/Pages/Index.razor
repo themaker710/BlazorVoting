@@ -41,7 +41,7 @@
             </MudForm>
         </MudCardContent>
     </MudCard>
-    <MudButton @onclick="async () => await TestMessage()">test message</MudButton>
+    <MudSpacer></MudSpacer>
 }
 else
 {
@@ -65,7 +65,7 @@ else
     </MudCard>
 
 
-
+    <MudSpacer></MudSpacer>
 
     <MudCard>
         <MudCardHeader>
@@ -134,20 +134,6 @@ else
         StateHasChanged();
     }
 
-    async Task TestMessage()
-    {
-        if(hubConnection is not null)
-        {
-            await hubConnection.SendAsync("SendMessage", "test message");
-        }
-    }
-
-    protected override void OnInitialized()
-    {
-
-        base.OnInitialized();
-    }
-
     protected override async Task OnInitializedAsync()
     {
         hubConnection = new HubConnectionBuilder()
@@ -157,11 +143,11 @@ else
         Snackbar.Add("Connection to poll endpoint established", Severity.Success);
 
 
-        hubConnection.On<Session, string>("RecieveSession", (s, msg) =>
+        hubConnection.On<Session, string>("ReceiveSession", (s, msg) =>
         {
-        session = s;
-        Snackbar.Add(msg, (s == null) ? Severity.Error : Severity.Normal);
-        RecieveSession();
+            session = s;
+            Snackbar.Add(msg, Severity.Normal);
+            RecieveSession();
         });
         hubConnection.On<string>("ReceiveMessage", (msg) =>
         {
@@ -183,23 +169,23 @@ else
 
     void RecieveSession()
     {
-        Console.WriteLine(session);
+        Console.WriteLine(session.ID);
 
         if(session != null)
         {
             _generatingSession = false;
 
-
+            Console.WriteLine(session.Name);
             StateHasChanged();
 
         }
-    }
 
-    private async Task Send()
-    {
-        if (hubConnection is not null)
+        //fail conditions
+        else
         {
-            await hubConnection.SendAsync("SendMessage");
+            Snackbar.Add("Session creation failed", Severity.Error);
+            _generatingSession = false;
+            StateHasChanged();
         }
     }
 

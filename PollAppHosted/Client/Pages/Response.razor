@@ -40,7 +40,7 @@
     <MudCard>
         <MudCardHeader>
             <CardHeaderContent>
-                <MudText Typo="Typo.h4" GutterBottom="true">Test</MudText>
+                <MudText Typo="Typo.h4" GutterBottom="true">@session.Name</MudText>
             </CardHeaderContent>
             <CardHeaderActions>
                 <MudButton Variant="Variant.Filled" Color="Color.Error" @onclick="@LeaveSession" Class="ml-auto inline">Disconnect</MudButton>
@@ -180,7 +180,8 @@
         if (hubConnection is not null)
         {
             await hubConnection.SendAsync("JoinSession", scode, uname, "voter");
-            IsConnected = true;
+            //This may fail.
+            //IsConnected = true;
         }
     }
 
