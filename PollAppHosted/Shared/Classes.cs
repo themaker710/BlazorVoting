@@ -44,7 +44,7 @@ namespace PollAppHosted.Shared
 
         public static implicit operator SessionInfo(Session s)
         {
-            return new SessionInfo { ID = s.ID, Name = (s.Name == null) ? s.ID.ToString() : s.Name, CreationDate = s.creationTime };
+            return new SessionInfo { ID = s.ID, Name = s.Name ?? s.ID.ToString(), CreationDate = s.creationTime };
         }
     }
 
@@ -56,7 +56,7 @@ namespace PollAppHosted.Shared
         private int _id;
         private string _name;
         private Poll? _activePoll;
-        private bool _isActive;
+        private SessionState _state;
         private DateTime _creationTime;
 
         public List<UserSessionRecord> users { get { return _users; } set { _users = value; } }
@@ -65,10 +65,18 @@ namespace PollAppHosted.Shared
         public int ID { get { return _id; } set { _id = value; } }
         public string Name { get { return _name; } set { _name = value; } }
         public Poll? activePoll { get { return _activePoll; } set { _activePoll = value; } }
-        public bool IsActive { get { return _isActive; } set { _isActive = value; } }
+        public SessionState State { get { return _state; } set { _state = value; } }
         public DateTime creationTime { get { return _creationTime; } set { _creationTime = value; } }
 
         public bool IsEmpty => ID == 0;
+
+    }
+    public enum SessionState
+    {
+        Inactive,
+        Idle,
+        Polling,
+        Ended
     }
     public struct PollResult
     {

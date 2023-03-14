@@ -1,0 +1,109 @@
+﻿@page "/admin"
+@inject NavigationManager Navigation
+@implements IAsyncDisposable
+@using Microsoft.AspNetCore.SignalR.Client;
+@using PollAppHosted.Shared;
+
+
+<MudText Typo="Typo.h3" GutterBottom="true">Admin Dash</MudText>
+<MudText Class="mb-8">Manage sessions and send notifications from this page.</MudText>
+<MudButton @onclick="async () => await RefreshList()">Refresh List</MudButton>
+
+<MudTable Items="@sessions">
+    <HeaderContent>
+        <MudTh>Session ID</MudTh>
+        <MudTh>Session Name</MudTh>
+        <MudTh>State</MudTh>
+        <MudTh>Connected Users</MudTh>
+        <MudTh>Actions</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd>@context.ID</MudTd>
+        <MudTd>@context.Name</MudTd>
+        <MudTd>
+            @switch (context.State)
+{
+                case SessionState.Inactive:
+                    <MudChip Color="Color.Warning" Variant="Variant.Filled" Class="mr-2">Inactive</MudChip>
+                    break;
+                case SessionState.Idle:
+                    <MudChip Color="Color.Primary" Variant="Variant.Filled" Class="mr-2">Idle</MudChip>
+                    break;
+                case SessionState.Polling:
+                    <MudChip Color="Color.Warning" Variant="Variant.Filled" Class="mr-2">Polling</MudChip>
+                    break;
+                case SessionState.Ended:
+                    <MudChip Color="Color.Success" Variant="Variant.Filled" Class="mr-2">Ended</MudChip>
+                    break;
+            }
+        </MudTd>
+        <MudTd>@context</MudTd>
+        <MudTd>
+            <MudButton Color="Color.Primary" Variant="Variant.Outlined" OnClick="@(async () => await ViewSession(context))" Class="mr-2">
+                <MudIcon Icon="@Icons.Material.Filled.Visibility" />
+                <MudText>View</MudText>
+            </MudButton>
+            <MudButton Color="Color.Error" Variant="Variant.Outlined" OnClick="@(async () => await DeleteSession(context))">
+                <MudIcon Icon="@Icons.Material.Filled.Delete" />
+                <MudText>Delete</MudText>
+            </MudButton>
+        </MudTd>
+    </RowTemplate>
+</MudTable>
+
+@code {
+    private HubConnection? hubConnection;
+    private List<Session> sessions;
+
+    protected override async Task OnInitializedAsync()
+    {
+        hubConnection = new HubConnectionBuilder()
+        .WithUrl(Navigation.ToAbsoluteUri("/poll"))
+        .Build();
+
+        //Add all recieving methods here
+        hubConnection.On<List<Session>>("ReceiveSessions", (sess) =>
+        {
+            sessions = sess;
+            StateHasChanged();
+        });
+
+        await hubConnection.StartAsync();
+    }
+
+    private async Task ViewSession(Session s)
+    {
+        if (hubConnection is not null)
+        {
+            //await hubConnection.SendAsync("GetSessions", scode, uname, "voter");
+
+        }
+    }
+
+
+    private async Task RefreshList()
+    {
+        if (hubConnection is not null)
+        {
+            await hubConnection.SendAsync("SendSessionList");
+
+        }
+    }
+
+    private async Task DeleteSession(Session s)
+    {
+        if (hubConnection is not null)
+        {
+            //await hubConnection.SendAsync("GetSessions", scode, uname, "voter");
+
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (hubConnection is not null)
+        {
+            await hubConnection.DisposeAsync();
+        }
+    }
+}

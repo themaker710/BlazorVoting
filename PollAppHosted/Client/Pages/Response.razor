@@ -1,4 +1,5 @@
 ﻿@page "/response"
+@page "/response/{DirectCode:int}"
 @inject NavigationManager Navigation
 @implements IAsyncDisposable
 @using Microsoft.AspNetCore.SignalR.Client;
@@ -6,8 +7,8 @@
 
 <PageTitle>Respond to Polls</PageTitle>
 
-<MudText Typo="Typo.h3" GutterBottom="true">Polling</MudText>
-<MudText Class="mb-8">Respond to polls from this page.</MudText>
+<MudText Typo="Typo.h3" GutterBottom="true">Voting Hub</MudText>
+<MudText Class="mb-8">Connect to sessions and respond to polls from this page.</MudText>
 <MudDivider />
 
 @if (!IsConnected)
@@ -18,25 +19,12 @@
                 <MudTextField Class="inline" T="int" @bind-Value="@scode" Label="Session Code" HelperText="4 Digit Number" Required="true" OnlyValidateIfDirty="true" Validation="@(new Func<int, IEnumerable<string>>(SessionCodeForm))" />
                 <MudTextField Class="inline" T="string" @bind-Value="@uname" Label="Name" HelperText="Optional" />
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(!success)" @onclick="@(async () => await JoinSession())" Class="ml-auto inline">Join</MudButton>
-                @*                <MudButton Disabled="@((_processing) ? _processing : !success)" OnClick="ProcessSomething" Variant="Variant.Filled" Color="Color.Primary">
-            @if (_processing)
-            {
-            <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
-            <MudText Class="ms-2">Connecting</MudText>
-            }
-            else
-            {
-            <MudText>Join Session</MudText>
-            }
-            </MudButton>*@
             </MudForm>
         </MudCardContent>
     </MudCard>
 }
-@if (IsConnected)
+else
 {
-
-    //Align a button and Header in same line
     <MudCard>
         <MudCardHeader>
             <CardHeaderContent>
@@ -95,6 +83,11 @@
 
 @code {
 
+    [Parameter]
+    public int? DirectCode { get; set; }
+
+    [Inject] private IDialogService DialogService { get; set; }
+
     private HubConnection? hubConnection;
     private List<string> messages = new List<string>();
     private string? userInput;
@@ -120,6 +113,27 @@
 
     }
 
+    protected override async Task OnParametersSetAsync()
+    {
+        if (DirectCode.ToString().Length == 4)
+            await DirectConnect();
+    }
+
+    async Task DirectConnect()
+    {
+        bool? result = await DialogService.ShowMessageBox(
+            $"Continue with code {DirectCode}",
+            "Enter name etc",
+            yesText: "Connect", cancelText: "Cancel");
+
+        if (result == false)
+        {
+            scode = DirectCode.Value;
+            await JoinSession();
+        }
+
+
+    }
     void BeginSession()
     {
         if (session.IsEmpty) return;
@@ -164,11 +178,12 @@
         hubConnection.On<Poll>("ReceivePoll", (poll) =>
                 { });
 
-        //Recieve poll from hub and display it
-        hubConnection.On<Session, string>("ReceiveSession", (sessionSV, msg) =>
+        //Recieve session from hub and display it
+        hubConnection.On<Session?, string>("ReceiveSession", (s, msg) =>
         {
-            Snackbar.Add(msg, (sessionSV == null) ? Severity.Error : Severity.Normal);
-            session = sessionSV;
+            Snackbar.Add(msg, (s == null) ? Severity.Error : Severity.Normal);
+            Console.WriteLine("im here");
+            session = s;
             BeginSession();
         });
 
@@ -180,14 +195,8 @@
         if (hubConnection is not null)
         {
             await hubConnection.SendAsync("JoinSession", scode, uname, "voter");
-            //This may fail.
-            //IsConnected = true;
         }
     }
-
-    //public bool IsConnected =>
-    //    hubConnection?.State == HubConnectionState.Connected;
-
     public async ValueTask DisposeAsync()
     {
         if (hubConnection is not null)

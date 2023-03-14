@@ -8,8 +8,8 @@ namespace PollAppHosted.Server.Hubs
     public class VoteHub : Hub
     {
 
-        List<Session> sessions = new List<Session>();
-        Dictionary<int, int> sessionsDict = new Dictionary<int, int>();
+        static List<Session> sessions = new List<Session>();
+        static Dictionary<int, int> sessionsDict = new Dictionary<int, int>();
         
         public async Task SendMessage(string msg)
         {
@@ -33,13 +33,12 @@ namespace PollAppHosted.Server.Hubs
             }
 
             //Create new session
-            Session newSession = new() { ID = sessionID, Name = sessionName, IsActive = false, creationTime = DateTime.Now, users = new List<UserSessionRecord>(), PollResults = new List<PollResult>()};
+            Session newSession = new() { ID = sessionID, Name = sessionName, State = SessionState.Inactive, creationTime = DateTime.Now, users = new List<UserSessionRecord>(), PollResults = new List<PollResult>()};
             newSession.users.Add(new UserSessionRecord { UserID = userID, UserName = username, joinTime = DateTime.Now, Role = "admin" });
             sessions.Add(newSession);
             UpdateSessions();
             //Add user to session group
             await Groups.AddToGroupAsync(Context.ConnectionId, newSession.ID.ToString());
-
             //Send caller session ID
             await Clients.Caller.SendAsync("ReceiveSession", newSession, $"Session succesfully created with code {newSession.ID}");
         }
@@ -62,53 +61,57 @@ namespace PollAppHosted.Server.Hubs
                 await Clients.Users(sessions[sessionIndex].users.Where(x => x.Role == "admin").Select(x => x.UserID.ToString()).ToArray()).SendAsync("ReceiveSession", sessions[sessionIndex], "Session Updated");
             }
         }
+        public async Task SendSessionList()
+        {
+            await Clients.Caller.SendAsync("ReceiveSessions", sessions);
+        }
 
         //Join a session
         public async Task JoinSession(int sessionID, string? username, string role)
         {
+
+            //Check if session exists
+            if (!sessionsDict.ContainsKey(sessionID))
+            {
+                //Send response to caller indicating session does not exist
+                await Clients.Caller.SendAsync("ReceiveSession", new Session(), "Session does not exist. Check your sesssion code");
+                return;
+            }
+
             //Get user ID
             string userID = Context.ConnectionId;
             //Get session index
             int sessionIndex = sessionsDict[sessionID];
 
-            //Check if session exists
-            if (sessionsDict.ContainsKey(sessionID))
-            {    
-                //Check if user is already registered for session
-                if (sessions[sessionIndex].users.Exists(x => x.UserID == userID))
-                {
-                    //Update user role
-                    UserSessionRecord record = sessions[sessionIndex].users.Find(x => x.UserID == userID);
-                    record.Role = role;
-                    sessions[sessionIndex].users.RemoveAll(x => x.UserID == userID);
-                    sessions[sessionIndex].users.Add(record);
-                }
-                else
-                {
-                    //Check if session is active
-                    if (!sessions[sessionIndex].IsActive)
-                    {
-                        //Send response to caller
-                        await Clients.Caller.SendAsync("ReceiveMessage", $"You have been successfully registered for the inactive {sessions[sessionIndex].Name} session. You will be notified when the session becomes active.");
-                    }
-                    //Add user to session and group
-                    await Groups.AddToGroupAsync(Context.ConnectionId, sessionID.ToString());
-                    sessions[sessionIndex].users.Add(new UserSessionRecord { UserID = userID, UserName = username, joinTime = DateTime.Now, Role = role });
-                    //Send caller active poll, if there is one
-                    if (sessions[sessionIndex].activePoll != null)
-                        await Clients.Caller.SendAsync("ReceivePoll", sessions[sessionIndex].activePoll);
-                    
-                }
 
-                //Send updated session to all admins for the session
-                await Clients.Users(sessions[sessionIndex].users.Where(x => x.Role == "admin").Select(x => x.UserID.ToString()).ToArray()).SendAsync("ReceiveSession", sessions[sessionIndex]);
+            //Check if user is already registered for session
+            if (sessions[sessionIndex].users.Exists(x => x.UserID == userID))
+            {
+                //Update user role
+                UserSessionRecord record = sessions[sessionIndex].users.Find(x => x.UserID == userID);
+                record.Role = role;
+                sessions[sessionIndex].users.RemoveAll(x => x.UserID == userID);
+                sessions[sessionIndex].users.Add(record);
             }
             else
             {
-                //Send response to caller indicating session does not exist
-                await Clients.Caller.SendAsync("ReceiveSession", null, "Session does not exist. Check your sesssion code");
-                return;
+                ////Check if session is active
+                //if (sessions[sessionIndex].State == SessionState.Inactive)
+                //{
+                //    //Send response to caller
+                //    await Clients.Caller.SendAsync("ReceiveMessage", $"You have been successfully registered for the inactive {sessions[sessionIndex].Name} session. You will be notified when the session becomes active.");
+                //}
+                //Add user to session and group
+                await Groups.AddToGroupAsync(Context.ConnectionId, sessionID.ToString());
+                sessions[sessionIndex].users.Add(new UserSessionRecord { UserID = userID, UserName = username, joinTime = DateTime.Now, Role = role });
+                //Send caller active poll, if there is one
+                if (sessions[sessionIndex].activePoll != null)
+                    await Clients.Caller.SendAsync("ReceivePoll", sessions[sessionIndex].activePoll);
             }
+
+            //Send updated session to all admins for the session
+            await Clients.Users(sessions[sessionIndex].users.Where(x => x.Role == "admin").Select(x => x.UserID.ToString()).ToArray()).SendAsync("ReceiveSession", sessions[sessionIndex]);
+            //Send response to caller
             await Clients.Caller.SendAsync("ReceiveSession", sessions[sessionIndex], "Session connection successful");
         }
         
@@ -180,7 +183,7 @@ namespace PollAppHosted.Server.Hubs
             if (sessions[sessionIndex].users.Exists(x => x.UserID == userID && x.Role == "admin"))
             {
                 //Activate session
-                sessions[sessionIndex].IsActive = true;
+                sessions[sessionIndex].State = SessionState.Idle;
                 //Send response to all users for the session
                 await Clients.Group(sessionID.ToString()).SendAsync("ReceiveMessage", "Session is now active.");
                 if (sessions[sessionIndex].activePoll != null)
@@ -201,7 +204,7 @@ namespace PollAppHosted.Server.Hubs
             if (sessions[sessionIndex].users.Exists(x => x.UserID == userID && x.Role == "admin"))
             {
                 //End session
-                sessions[sessionIndex].IsActive = false;
+                sessions[sessionIndex].State = SessionState.Ended;
                 //Send response to all users for the session
                 await Clients.Group(sessionID.ToString()).SendAsync("ReceiveMessage", "Session has been closed by an admin. Thank you for participating!");
                 //Force client to send session leave request
@@ -223,8 +226,8 @@ namespace PollAppHosted.Server.Hubs
             //Check if user is registered for session
             if (sessions[sessionIndex].users.Exists(x => x.UserID == userID))
             {
-                //Check if session is active
-                if (sessions[sessionIndex].IsActive)
+                //Check if session is polling
+                if (sessions[sessionIndex].State == SessionState.Polling)
                 {
                     //Check if user has already voted the same response (can change)
                     if (!sessions[sessionIndex].activeResponses.Exists(x => x.Item1 == userID && x.Item2 == vote))

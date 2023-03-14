@@ -1,200 +1,21 @@
 ﻿@page "/"
 @inject NavigationManager Navigation
-@implements IAsyncDisposable
-@using Microsoft.AspNetCore.SignalR.Client;
 @using PollAppHosted.Shared;
 
 
-<PageTitle>Admin Dash</PageTitle>
-<MudText Typo="Typo.h3" GutterBottom="true">Dashboard</MudText>
-<MudText Class="mb-8">Prepare questions, view results, and send notifications from this page.</MudText>
-<MudBadge Origin="Origin.TopRight" Overlap="true" Icon="@badgeIcon">
-    <MudChip Label="true" Color="@chipColor" Style="color:black;">@chipText</MudChip>
-</MudBadge>
+<MudAlert Severity="Severity.Info" Color="Color.Primary">
+    <MudText Typo="Typo.h3">Welcome to Poll App</MudText>
+    <MudText>Click on the button below to get started.</MudText>
+</MudAlert>
 
-<MudDivider />
-
-@if (session is null)
-{
-    
-    <MudCard>
-        <MudCardHeader>
-            <CardHeaderContent>
-                <MudText Typo="Typo.h4" GutterBottom="true">Create Session</MudText>
-            </CardHeaderContent>
-        </MudCardHeader>
-        <MudCardContent>
-            <MudForm @bind-IsValid="@success">
-                <MudTextField Class="inline" T="string" @bind-Value="@sessionName" Label="Session Name" Required="true" />
-                <MudTextField Class="inline" T="string" @bind-Value="@uname" Label="Name" HelperText="Optional" />
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(!success || _generatingSession)" @onclick="@(async () => await CreateSession())" Class="ml-auto inline">
-                    @if (_generatingSession)
-                    {
-                        <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
-                        <MudText Class="ms-2">Processing</MudText>
-                    }
-                    else
-                    {
-                    <MudText>Create</MudText>
-                    }
-                </MudButton>
-            </MudForm>
-        </MudCardContent>
-    </MudCard>
-    <MudSpacer></MudSpacer>
-}
-else
-{
-    @if (!dismissConf)
-    {
-        //Alert confirm
-        <MudAlert Severity="Severity.Success" ShowCloseIcon="true" CloseIconClicked="(() => dismissConf = true)">
-            <MudText>Session created successfully with connection code <b>@session.ID</b></MudText>
-        </MudAlert>
-    }
-    //Display session information including list of connected users
-    <MudCard>
-        <MudCardHeader>
-            <CardHeaderContent>
-                <MudText Typo="Typo.h4" GutterBottom="true">Session Info</MudText>
-            </CardHeaderContent>
-            <CardHeaderActions>
-                <MudButton Variant="Variant.Filled" Color="Color.Error" @onclick="@EndConfirmation" Class="ml-auto inline">End Session</MudButton>
-            </CardHeaderActions>
-        </MudCardHeader>
-    </MudCard>
-
-
-    <MudSpacer></MudSpacer>
-
-    <MudCard>
-        <MudCardHeader>
-            <CardHeaderContent>
-                <MudText Typo="Typo.h4" GutterBottom="true">Create Poll</MudText>
-            </CardHeaderContent>
-        </MudCardHeader>
-        <MudCardContent>
-            <MudForm @bind-IsValid="@success">
-                <MudTextField Class="inline" T="string" @bind-Value="@questionText" Label="Question" HelperText="Required" Required="true" OnlyValidateIfDirty="true" />
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(!success)" Class="ml-auto inline">Add</MudButton>
-            </MudForm>
-        </MudCardContent>
-    </MudCard>
-
-    //View results of active session
-    <MudCard>
-        <MudCardHeader>
-            <CardHeaderContent>
-                <MudText Typo="Typo.h4" GutterBottom="true">View Results</MudText>
-            </CardHeaderContent>
-        </MudCardHeader>
-        <MudCardContent>
-            <MudForm @bind-IsValid="@success">
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(!success)" Class="ml-auto inline">View</MudButton>
-            </MudForm>
-        </MudCardContent>
-    </MudCard>
-}
-
-
+<MudButton Color="Color.Primary" Variant="Variant.Filled" Class="mt-4">
+    <MudIcon Icon="@Icons.Material.Filled.Login" />
+    <MudText>Login</MudText>
+</MudButton>
 
 @code {
-
-    [Inject] private IDialogService DialogService { get; set; }
-
-    bool success, _generatingSession = false, dismissConf = false;
-    private HubConnection? hubConnection;
-    public string badgeIcon => (IsConnected) ? Icons.Material.Filled.Lock : Icons.Material.Filled.LockOpen;
-    public string chipText => (IsConnected) ? "Connected" : "Disconnected";
-    public Color chipColor => (IsConnected) ? Color.Success : Color.Error;
-    Session? session;
-
-    public bool IsConnected =>
-        hubConnection?.State == HubConnectionState.Connected;
-
-    string sessionName, uname, questionText;
-
-    private async void EndConfirmation()
-    {
-        bool? result = await DialogService.ShowMessageBox(
-            "Warning",
-            "Your session data is not saved. Save any poll results before ending the session. All connected users will be disconnected.",
-            yesText: "Disconnect", cancelText: "Cancel");
-
-        if (result == false)
-        {
-            if (hubConnection is not null)
-            {
-                await hubConnection.SendAsync("EndSession", session.ID);
-            }
-            //Clean up user side
-
-        }
-
-        StateHasChanged();
-    }
-
     protected override async Task OnInitializedAsync()
     {
-        hubConnection = new HubConnectionBuilder()
-            .WithUrl(Navigation.ToAbsoluteUri("/poll"))
-            .Build();
-
-        Snackbar.Add("Connection to poll endpoint established", Severity.Success);
-
-
-        hubConnection.On<Session, string>("ReceiveSession", (s, msg) =>
-        {
-            session = s;
-            Snackbar.Add(msg, Severity.Normal);
-            RecieveSession();
-        });
-        hubConnection.On<string>("ReceiveMessage", (msg) =>
-        {
-            Snackbar.Add(msg, Severity.Info);
-        });
-
-
-        await hubConnection.StartAsync();
-    }
-
-    private async Task CreateSession()
-    {
-        if (hubConnection is not null)
-        {
-            _generatingSession = true;
-            await hubConnection.SendAsync("CreateSession", sessionName, uname);
-        }
-    }
-
-    void RecieveSession()
-    {
-        Console.WriteLine(session.ID);
-
-        if(session != null)
-        {
-            _generatingSession = false;
-
-            Console.WriteLine(session.Name);
-            StateHasChanged();
-
-        }
-
-        //fail conditions
-        else
-        {
-            Snackbar.Add("Session creation failed", Severity.Error);
-            _generatingSession = false;
-            StateHasChanged();
-        }
-    }
-
-
-    public async ValueTask DisposeAsync()
-    {
-        if (hubConnection is not null)
-        {
-            await hubConnection.DisposeAsync();
-        }
+        Navigation.NavigateTo("response");
     }
 }

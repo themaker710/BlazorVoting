@@ -1,4 +1,7 @@
 ﻿@inherits LayoutComponentBase
+@inject NavigationManager Navigation
+@implements IAsyncDisposable
+@using Microsoft.AspNetCore.SignalR.Client;
 
 <MudThemeProvider />
 <MudDialogProvider />
@@ -8,12 +11,22 @@
     <MudAppBar Elevation="0">
         <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="@((e) => DrawerToggle())" />
         <MudSpacer />
-@*        <MudIconButton Icon="@Icons.Custom.Brands.MudBlazor" Color="Color.Inherit" Link="https://mudblazor.com/" Target="_blank" />
-        <MudIconButton Icon="@Icons.Custom.Brands.GitHub" Color="Color.Inherit" Link="https://github.com/MudBlazor/MudBlazor/" Target="_blank" />*@
+        <MudTooltip Text="@((IsConnected) ? "Connected" : "Disconnected")">
+            <MudAvatar Color="@((IsConnected) ? Color.Success : Color.Warning)" Variant="Variant.Filled" Size="Size.Medium">
+                @if (IsConnected)
+                {
+                    <MudIcon Color="Color.Dark" Icon="@Icons.Material.Filled.SignalWifi4BarLock" Size="Size.Medium" />
+                }
+                else
+                {
+                    <MudIcon Color="Color.Dark" Icon="@Icons.Material.Filled.SignalWifiOff" Size="Size.Medium" />
+                }
+            </MudAvatar>
+        </MudTooltip>
     </MudAppBar>
     <MudDrawer @bind-Open="_drawerOpen" Elevation="1">
         <MudDrawerHeader>
-            <MudText Typo="Typo.h6">PollAppHosted</MudText>
+            <MudText Typo="Typo.h6">HSHS Voting App</MudText>
         </MudDrawerHeader>
         <NavMenu />
     </MudDrawer>
@@ -26,7 +39,35 @@
 
 @code {
     bool _drawerOpen = true;
+    private HubConnection? hubConnection;
 
+    bool IsConnected =>
+        hubConnection?.State == HubConnectionState.Connected;
+
+    protected override async Task OnInitializedAsync()
+    {
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl(Navigation.ToAbsoluteUri("/poll"))
+            .Build();
+        //Add all recieving methods here
+        hubConnection.On<string>("ReceiveMessage", (msg) =>
+        {
+            Snackbar.Add(msg, Severity.Info);
+            StateHasChanged();
+        });
+
+        await hubConnection.StartAsync();
+
+        StateHasChanged();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (hubConnection is not null)
+        {
+            await hubConnection.DisposeAsync();
+        }
+    }
     void DrawerToggle()
     {
         _drawerOpen = !_drawerOpen;
