@@ -78,6 +78,14 @@ namespace PollAppHosted.Shared
         Polling,
         Ended
     }
+    public enum UserStatus
+    {
+        Voter,
+        Admin,
+        Disconnected, 
+        Spectator
+    }
+
     public struct PollResult
     {
         public Poll poll;
@@ -85,7 +93,7 @@ namespace PollAppHosted.Shared
     }
     public struct UserSessionRecord
     {
-        private string _role;
+        private UserStatus _role;
         private string _userid;
         private string? _username;
         private DateTime _dt;
@@ -93,6 +101,6 @@ namespace PollAppHosted.Shared
         public string UserID { get { return _userid; } set { _userid = value; } }
         public string? UserName { get { return _username; } set { _username = value; } }
         public DateTime joinTime { get { return _dt; } set { _dt = value; } }
-        public string Role { get { return _role; } set { _role = value; } }
+        public UserStatus Role { get { return _role; } set { _role = value; } }
     }
 }

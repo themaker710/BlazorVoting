@@ -34,7 +34,7 @@ namespace PollAppHosted.Server.Hubs
 
             //Create new session
             Session newSession = new() { ID = sessionID, Name = sessionName, State = SessionState.Inactive, creationTime = DateTime.Now, users = new List<UserSessionRecord>(), PollResults = new List<PollResult>()};
-            newSession.users.Add(new UserSessionRecord { UserID = userID, UserName = username, joinTime = DateTime.Now, Role = "admin" });
+            newSession.users.Add(new UserSessionRecord { UserID = userID, UserName = username, joinTime = DateTime.Now, Role = UserStatus.Admin });
             sessions.Add(newSession);
             UpdateSessions();
             //Add user to session group
@@ -58,7 +58,7 @@ namespace PollAppHosted.Server.Hubs
                 //Remove user from session group
                 await Groups.RemoveFromGroupAsync(Context.ConnectionId, sessionID.ToString());
                 //Send updated session to all admins for the session
-                await Clients.Users(sessions[sessionIndex].users.Where(x => x.Role == "admin").Select(x => x.UserID.ToString()).ToArray()).SendAsync("ReceiveSession", sessions[sessionIndex], "Session Updated");
+                await Clients.Users(sessions[sessionIndex].users.Where(x => x.Role == UserStatus.Admin).Select(x => x.UserID.ToString()).ToArray()).SendAsync("ReceiveSession", sessions[sessionIndex], "Session Updated");
             }
         }
         public async Task SendSessionList()
@@ -66,8 +66,13 @@ namespace PollAppHosted.Server.Hubs
             await Clients.Caller.SendAsync("ReceiveSessions", sessions);
         }
 
+        public async Task RefreshSession(int sessionID)
+        {
+            await Clients.Caller.SendAsync("ReceiveSession", sessions[sessionsDict[sessionID]], "Session Updated");
+        }
+
         //Join a session
-        public async Task JoinSession(int sessionID, string? username, string role)
+        public async Task JoinSession(int sessionID, string? username)
         {
 
             //Check if session exists
@@ -83,34 +88,26 @@ namespace PollAppHosted.Server.Hubs
             //Get session index
             int sessionIndex = sessionsDict[sessionID];
 
-
             //Check if user is already registered for session
             if (sessions[sessionIndex].users.Exists(x => x.UserID == userID))
             {
-                //Update user role
-                UserSessionRecord record = sessions[sessionIndex].users.Find(x => x.UserID == userID);
-                record.Role = role;
-                sessions[sessionIndex].users.RemoveAll(x => x.UserID == userID);
-                sessions[sessionIndex].users.Add(record);
+                //Check if user is admin, and thus redirect to session dashboard page
+                if (sessions[sessionIndex].users.Find(x => x.UserID == userID).Role == UserStatus.Admin)
+                {
+                    await Clients.Caller.SendAsync("ReceiveSessionAdmin", sessions[sessionIndex], "Reconnecting to Session Manager");
+                    return;
+                }
             }
             else
             {
-                ////Check if session is active
-                //if (sessions[sessionIndex].State == SessionState.Inactive)
-                //{
-                //    //Send response to caller
-                //    await Clients.Caller.SendAsync("ReceiveMessage", $"You have been successfully registered for the inactive {sessions[sessionIndex].Name} session. You will be notified when the session becomes active.");
-                //}
                 //Add user to session and group
                 await Groups.AddToGroupAsync(Context.ConnectionId, sessionID.ToString());
-                sessions[sessionIndex].users.Add(new UserSessionRecord { UserID = userID, UserName = username, joinTime = DateTime.Now, Role = role });
-                //Send caller active poll, if there is one
-                if (sessions[sessionIndex].activePoll != null)
-                    await Clients.Caller.SendAsync("ReceivePoll", sessions[sessionIndex].activePoll);
+                sessions[sessionIndex].users.Add(new UserSessionRecord { UserID = userID, UserName = username, joinTime = DateTime.Now, Role = UserStatus.Voter });
             }
 
             //Send updated session to all admins for the session
-            await Clients.Users(sessions[sessionIndex].users.Where(x => x.Role == "admin").Select(x => x.UserID.ToString()).ToArray()).SendAsync("ReceiveSession", sessions[sessionIndex]);
+            await Clients.Users(sessions[sessionIndex].users.Where(x => x.Role == UserStatus.Admin).Select(x => x.UserID.ToString()).ToArray()).SendAsync("ReceiveSession", sessions[sessionIndex], "Refreshed Session Data");
+
             //Send response to caller
             await Clients.Caller.SendAsync("ReceiveSession", sessions[sessionIndex], "Session connection successful");
         }
@@ -156,7 +153,7 @@ namespace PollAppHosted.Server.Hubs
             //Get session index
             int sessionIndex = sessionsDict[sessionID];
             //Check if user is admin
-            if (sessions[sessionIndex].users.Exists(x => x.UserID == userID && x.Role == "admin"))
+            if (sessions[sessionIndex].users.Exists(x => x.UserID == userID && x.Role == UserStatus.Admin))
             {
                 //Send response to all users for the session
                 await Clients.Group(sessionID.ToString()).SendAsync("ReceiveMessage", "Poll has been ended.");
@@ -180,7 +177,7 @@ namespace PollAppHosted.Server.Hubs
             //Get session index
             int sessionIndex = sessionsDict[sessionID];
             //Check if user is admin
-            if (sessions[sessionIndex].users.Exists(x => x.UserID == userID && x.Role == "admin"))
+            if (sessions[sessionIndex].users.Exists(x => x.UserID == userID && x.Role == UserStatus.Admin))
             {
                 //Activate session
                 sessions[sessionIndex].State = SessionState.Idle;
@@ -201,14 +198,14 @@ namespace PollAppHosted.Server.Hubs
             //Get session index
             int sessionIndex = sessionsDict[sessionID];
             //Check if user is admin
-            if (sessions[sessionIndex].users.Exists(x => x.UserID == userID && x.Role == "admin"))
+            if (sessions[sessionIndex].users.Exists(x => x.UserID == userID && x.Role == UserStatus.Admin))
             {
                 //End session
                 sessions[sessionIndex].State = SessionState.Ended;
                 //Send response to all users for the session
                 await Clients.Group(sessionID.ToString()).SendAsync("ReceiveMessage", "Session has been closed by an admin. Thank you for participating!");
                 //Force client to send session leave request
-                await Clients.Group(sessionID.ToString()).SendAsync("EndSession", sessionID);
+                await Clients.Group(sessionID.ToString()).SendAsync("EndSession");
                 
             }
             else

@@ -1,4 +1,5 @@
 ﻿@page "/sessions"
+@page "/sessions/{DirectCode:int}"
 @inject NavigationManager Navigation
 @implements IAsyncDisposable
 @using Microsoft.AspNetCore.SignalR.Client;
@@ -49,6 +50,7 @@ else
         </MudAlert>
     }
     //Display session information including list of connected users
+
     <MudCard>
         <MudCardHeader>
             <CardHeaderContent>
@@ -58,11 +60,17 @@ else
                 <MudButton Variant="Variant.Filled" Color="Color.Error" @onclick="@EndConfirmation" Class="ml-auto inline">End Session</MudButton>
             </CardHeaderActions>
         </MudCardHeader>
+        <MudCardContent>
+            <MudText Typo="Typo.h5" GutterBottom="true">Session Name: @session.Name</MudText>
+            <MudText Typo="Typo.h5" GutterBottom="true">Connection Code: @session.ID</MudText>
+            <MudText Typo="Typo.h5" GutterBottom="true">Connected Users: @session.users.Count</MudText>
+            <MudText Typo="Typo.h5" GutterBottom="true">Created: @session.creationTime.ToString("t")</MudText>
+        </MudCardContent>
     </MudCard>
-
 
     <MudSpacer></MudSpacer>
 
+    //Create Poll with a dynamic amount of responses
     <MudCard>
         <MudCardHeader>
             <CardHeaderContent>
@@ -96,6 +104,9 @@ else
 
 @code {
 
+    [Parameter]
+    public int? DirectCode { get; set; }
+
     [Inject] private IDialogService DialogService { get; set; }
 
     bool success, _generatingSession = false, dismissConf = false;
@@ -122,10 +133,18 @@ else
                 await hubConnection.SendAsync("EndSession", session.ID);
             }
             //Clean up user side
-
+            session = null;
+            Snackbar.Add("Session ended", Severity.Success);
         }
 
         StateHasChanged();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (DirectCode.ToString().Length == 4)
+            if (hubConnection is not null)
+                await hubConnection.SendAsync("RefreshSession", DirectCode);
     }
 
     protected override async Task OnInitializedAsync()

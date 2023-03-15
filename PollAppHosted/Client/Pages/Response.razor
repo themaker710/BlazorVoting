@@ -1,9 +1,11 @@
 ﻿@page "/response"
 @page "/response/{DirectCode:int}"
 @inject NavigationManager Navigation
+@inject IDialogService DialogService
 @implements IAsyncDisposable
 @using Microsoft.AspNetCore.SignalR.Client;
 @using PollAppHosted.Shared;
+@using PollAppHosted.Client.Components;
 
 <PageTitle>Respond to Polls</PageTitle>
 
@@ -13,7 +15,7 @@
 
 @if (!IsConnected)
 {
-    <MudCard>
+    <MudCard Outlined="true">
         <MudCardContent>
             <MudForm @bind-IsValid="@success">
                 <MudTextField Class="inline" T="int" @bind-Value="@scode" Label="Session Code" HelperText="4 Digit Number" Required="true" OnlyValidateIfDirty="true" Validation="@(new Func<int, IEnumerable<string>>(SessionCodeForm))" />
@@ -86,7 +88,7 @@ else
     [Parameter]
     public int? DirectCode { get; set; }
 
-    [Inject] private IDialogService DialogService { get; set; }
+    //[Inject] private IDialogService DialogService { get; set; }
 
     private HubConnection? hubConnection;
     private List<string> messages = new List<string>();
@@ -94,7 +96,7 @@ else
     private string? messageInput;
     private DateTime connectionTime;
 
-    bool success, showConfirmation, IsConnected, IsActivePoll, HasVoted;
+    bool success, showConfirmation, IsConnected, IsActivePoll, HasVoted, visible;
 
     SessionInfo session = new SessionInfo();
 
@@ -121,17 +123,16 @@ else
 
     async Task DirectConnect()
     {
-        bool? result = await DialogService.ShowMessageBox(
-            $"Continue with code {DirectCode}",
-            "Enter name etc",
-            yesText: "Connect", cancelText: "Cancel");
+        var parameters = new DialogParameters { ["DirectCode"] = DirectCode };
 
-        if (result == false)
+        var dialog = DialogService.Show<ConnectionConfirmation_Dialog>("Delete Server", parameters);
+        var result = await dialog.Result;
+
+        if (!result.Cancelled)
         {
-            scode = DirectCode.Value;
+            uname = result.Data.ToString();
             await JoinSession();
         }
-
 
     }
     void BeginSession()
@@ -145,6 +146,9 @@ else
         IsConnected = true;
 
         connectionTime = new DateTime();
+
+        //Check if there is an active poll
+
     }
 
     async Task Vote(int id)
@@ -182,9 +186,18 @@ else
         hubConnection.On<Session?, string>("ReceiveSession", (s, msg) =>
         {
             Snackbar.Add(msg, (s == null) ? Severity.Error : Severity.Normal);
-            Console.WriteLine("im here");
             session = s;
             BeginSession();
+        });
+        hubConnection.On<Session, string>("ReceiveSessionAdmin", (s, msg) =>
+        {
+            Snackbar.Add(msg, Severity.Info);
+            Navigation.NavigateTo("sessions/" + s.ID);
+        });
+        hubConnection.On("EndSession", () =>
+        {
+            Snackbar.Add("Session master closed the session.", Severity.Info);
+            IsConnected = false;
         });
 
         await hubConnection.StartAsync();
@@ -194,7 +207,7 @@ else
     {
         if (hubConnection is not null)
         {
-            await hubConnection.SendAsync("JoinSession", scode, uname, "voter");
+            await hubConnection.SendAsync("JoinSession", scode, uname);
         }
     }
     public async ValueTask DisposeAsync()
