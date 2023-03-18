@@ -23,17 +23,15 @@ namespace PollAppHosted.Shared
         public DateTime? EndDate { get { return _endDate; } set { _endDate = value; } }
         public List<PollOption> Options { get { return _options; } set { _options = value; } }
 
-        //public virtual void AddOption(string name) => this.Options.Add(new PollOption { Name = name, ID = Options.Count });
-
         public struct PollOption
         {
             private string _name;
-            private int _votes;
             private int _id;
             
             public string Name { get { return _name; } set { _name = value; } }
-            public int Votes { get { return _votes; } set { _votes = value; } }
             public int ID { get { return _id; } set { _id = value; } }
+
+            
         }
     }
 
@@ -93,6 +91,7 @@ namespace PollAppHosted.Shared
     public struct PollResult
     {
         public Poll poll;
+        public int totalVotes;
         public Dictionary<int, int> optionVotes;
     }
     public struct UserSessionRecord

@@ -47,8 +47,54 @@ else
     </MudCard>
 
     <MudDivider />
+    @if (showResults)
+    {
+        //MudCard with result pie chart
+        <MudCard>
+            <MudCardHeader>
+                <CardHeaderContent>
+                    <MudText Typo="Typo.h5" GutterBottom="true">Results</MudText>
+                </CardHeaderContent>
+            </MudCardHeader>
+            <MudCardContent>
+                <MudGrid Justify="Justify.Center">
+                    @foreach (Poll.PollOption option in pollResult.Value.poll.Options)
+                    {
+                        <MudItem Width="auto" Height="140px">
+                            <MudCard>
+                                <MudCardContent>
+                                    <MudText Typo="Typo.h6" GutterBottom="true">@option.Name</MudText>
+                                    <MudText>Number of Votes: @pollResult.Value.optionVotes[option.ID]</MudText>
+                                    <MudText>Percentage of Votes: @((int)((pollResult.Value.optionVotes[option.ID]/pollResult.Value.totalVotes)*100))%</MudText>
+                                </MudCardContent>
+                            </MudCard>
+                        </MudItem>
+                    }
+                </MudGrid>
+            </MudCardContent>
+        </MudCard>
 
-    @if (IsActivePoll)
+        <MudCard>
+            <MudCardHeader>
+                <CardHeaderContent>
+                    <MudText Typo="Typo.h5" GutterBottom="true">Pie Chart</MudText>
+                </CardHeaderContent>
+            </MudCardHeader>
+            <MudCardContent>
+                <MudGrid Justify="Justify.Center">
+                    <MudItem Width="auto" Height="140px">
+                        <MudCard>
+                            <MudCardContent>
+                                <MudChart ChartType="ChartType.Pie" InputData="@ToDouble(pollResult.Value.optionVotes)" InputLabels="@ToSArray(pollResult.Value.poll.Options)"/>
+                            </MudCardContent>
+                        </MudCard>
+                    </MudItem>
+                </MudGrid>
+            </MudCardContent>
+        </MudCard>
+    }
+
+    @if (activePoll != null)
     {
         //Poll display here
         <MudCard>
@@ -66,8 +112,6 @@ else
                         </MudItem>
                     }
                 </MudGrid>
-
-                <MudText>Options: @activePoll.Options</MudText>
             </MudCardContent>
         </MudCard>
     }
@@ -96,17 +140,32 @@ else
     private string? messageInput;
     private DateTime connectionTime;
 
-    bool success, showConfirmation, IsConnected, IsActivePoll, HasVoted, visible;
+    bool success, showConfirmation, showResults, IsConnected, HasVoted, visible;
 
     SessionInfo session = new SessionInfo();
 
     string uname;
     int scode;
 
-    Poll activePoll;
+    Poll? activePoll = null;
+    PollResult? pollResult = null;
 
     void CloseConfirmation() => showConfirmation = false;
 
+    double[] ToDouble(Dictionary<int, int> dict)
+    {
+        double[] result = new double[dict.Count];
+        for (int i = 0; i < result.Length; i++)
+            result[i] = dict[i];
+        return result;
+    }
+    static string[] ToSArray(List<Poll.PollOption> opp)
+    {
+        string[] result = new string[opp.Count];
+        for (int i = 0; i < result.Length; i++)
+            result[i] = opp[i].Name;
+        return result;
+    }
 
     private IEnumerable<string> SessionCodeForm(int code)
     {
@@ -160,6 +219,12 @@ else
         }
     }
 
+    void EndPoll(PollResult pr)
+    {
+        activePoll = null;
+        pollResult = pr;
+    }
+
     void LeaveSession()
     {
 
@@ -180,7 +245,13 @@ else
 
         //Recieve poll from hub and display it
         hubConnection.On<Poll>("ReceivePoll", (poll) =>
-                { });
+        {
+            activePoll = poll;
+        });
+        hubConnection.On<PollResult>("ReceivePollResults", (pollr) =>
+        {
+            EndPoll(pollr);
+        });
 
         //Recieve session from hub and display it
         hubConnection.On<Session?, string>("ReceiveSession", (s, msg) =>

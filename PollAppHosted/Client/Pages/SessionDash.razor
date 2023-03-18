@@ -47,7 +47,7 @@ else
     {
         //Alert confirm
         <MudAlert Severity="Severity.Success" ShowCloseIcon="true" CloseIconClicked="(() => dismissConf = true)">
-            <MudText>Creation Successful! Use code <b>@session.ID</b> or link <a href=$"https://hshsvoting.azurewebsites.net/response/{session.ID}">/response/@session.ID</a> to join.</MudText>
+            <MudText>Creation Successful! Use code <b>@session.ID</b> or link <a href="https://hshsvoting.azurewebsites.net/response/@session.ID">/response/@session.ID</a> to join.</MudText>
         </MudAlert>
     }
     <MudCard>
@@ -61,7 +61,7 @@ else
                 </CardHeaderActions>
             </MudCardHeader>
             <MudCardContent>
-                <MudSimpleTable Style="overflow-x:auto">
+                <MudSimpleTable>
                     <tbody>
                         <tr>
                             <td>Session Name</td>
@@ -85,16 +85,16 @@ else
                                 @switch (session.State)
                             {
                                 case SessionState.Inactive:
-                                    <MudChip Color="Color.Warning" Variant="Variant.Filled" Class="mr-2">Inactive</MudChip>
+                                    <MudChip Color="Color.Warning" Variant="Variant.Filled" Class="mr-4">Inactive</MudChip>
                                     break;
                                 case SessionState.Idle:
-                                    <MudChip Color="Color.Primary" Variant="Variant.Filled" Class="mr-2">Idle</MudChip>
+                                    <MudChip Color="Color.Primary" Variant="Variant.Filled" Class="mr-4">Idle</MudChip>
                                     break;
                                 case SessionState.Polling:
-                                    <MudChip Color="Color.Warning" Variant="Variant.Filled" Class="mr-2">Polling</MudChip>
+                                    <MudChip Color="Color.Warning" Variant="Variant.Filled" Class="mr-4">Polling</MudChip>
                                     break;
                                 case SessionState.Ended:
-                                    <MudChip Color="Color.Success" Variant="Variant.Filled" Class="mr-2">Ended</MudChip>
+                                    <MudChip Color="Color.Success" Variant="Variant.Filled" Class="mr-4">Ended</MudChip>
                                     break;
                             }
                         </td>
@@ -106,63 +106,91 @@ else
 
     <MudDivider DividerType="DividerType.Middle" Class="my-6" />
 
-    //Dynamic grid of questions with modal to add new ones
-    <MudCardHeader>
-        <CardHeaderContent>
-            <MudText Typo="Typo.h4" GutterBottom="true">Questions</MudText>
-        </CardHeaderContent>
-        <CardHeaderActions>
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" @onclick="@(async () => await AddQuestion())" Class="ml-auto inline">
-                <MudIcon Icon="add" />
-                <MudText Class="ms-2">Add Question</MudText>
-            </MudButton>
-        </CardHeaderActions>
-    </MudCardHeader>
-    <MudCardContent>
-        <MudGrid>
-            @foreach (var question in polls)
-            {
-                <MudItem xs="12" sm="12" md="6" lg="4" xl="3">
-                    <MudCard>
-                        <MudCardHeader>
-                            <CardHeaderContent>
-                                <MudText Typo="Typo.h5" GutterBottom="true">Question @question.ID</MudText>
-                            </CardHeaderContent>
-                            <CardHeaderActions>
-                                <MudButton Variant="Variant.Filled" Color="Color.Primary" @onclick="@(async () => await EditQuestion(question.ID))" Class="ml-auto inline">
-                                    <MudIcon Icon="edit" />
-                                    <MudText Class="ms-2">Edit</MudText>
-                                </MudButton>
-                                <MudButton Variant="Variant.Filled" Color="Color.Error" @onclick="@(async () => await DeleteQuestion(question.ID))" Class="ml-auto inline">
-                                    <MudIcon Icon="delete" />
-                                    <MudText Class="ms-2">Delete</MudText>
-                                </MudButton>
-                            </CardHeaderActions>
-                        </MudCardHeader>
-                        <MudCardContent>
-                            <MudSimpleTable Style="overflow-x:auto">
-                                <tbody>
-                                    <tr>
-                                        <td>Question</td>
-                                        <td>@question.Question</td>
-                                    </tr>
-                                    <tr>
-                                        <td>Answers</td>
-                                        <td>
-                                            @foreach (var answer in question.Options)
-                                            {
-                                                <MudChip Color="Color.Primary" Variant="Variant.Filled" Class="mr-2">@answer.Name</MudChip>
-                                            }
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </MudSimpleTable>
-                        </MudCardContent>
-                    </MudCard>
-                </MudItem>
-            }
-        </MudGrid>
-    </MudCardContent>
+    @if (session.activePoll != null)
+    {
+        <MudCard Style="color:orange">
+            <MudCardHeader>
+                <CardHeaderContent>
+                    <MudText Typo="Typo.h4" GutterBottom="true">Active Poll</MudText>
+                </CardHeaderContent>
+                <CardHeaderActions>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" @onclick="@(async () => await EndPoll())" Class="ml-auto inline">End Poll</MudButton>
+                </CardHeaderActions>
+            </MudCardHeader>
+            <MudCardContent>
+                <MudSimpleTable>
+                    <tbody>
+                        <tr>
+                            <td>Poll ID</td>
+                            <td>@session.activePoll.ID</td>
+                        </tr>
+                        <tr>
+                            <td>Poll Question</td>
+                            <td>@session.activePoll.Question</td>
+                        </tr>
+                        <tr>
+                            <td>Responses</td>
+                            <td>@responses / @session.users.Count(x => x.Role != UserStatus.Admin)</td>
+                        </tr>
+                        <tr>
+                            <td>Finish Time</td>
+                            @*<td>@session.activePoll.EndDate.Value.ToString("t")</td>*@
+                            <td>time to leave</td>
+                        </tr>
+                    </tbody>
+                </MudSimpleTable>
+            </MudCardContent>
+        </MudCard>
+    }
+    else
+    {
+        <MudCardHeader>
+            <CardHeaderContent>
+                <MudText Typo="Typo.h4">Questions</MudText>
+            </CardHeaderContent>
+            <CardHeaderActions>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" @onclick="@(async () => await AddQuestion())">
+                    <MudIcon Icon="@Icons.Material.Outlined.Add" />
+                    <MudText Class="ms-2">Add Question</MudText>
+                </MudButton>
+            </CardHeaderActions>
+        </MudCardHeader>
+        <MudCardContent>
+            <MudGrid>
+                @foreach (var question in polls)
+                {
+                    <MudItem>
+                        <MudCard Square="true">
+                            <MudCardHeader>
+                                <CardHeaderContent>
+                                    <MudText Typo="Typo.h5" GutterBottom="true">Question @question.ID</MudText>
+                                </CardHeaderContent>
+                                <CardHeaderActions>
+                                    <MudTooltip Content="Edit Question" Class="mr-4">
+                                        <MudFab @onclick="@(async () => await EditQuestion(question.ID))" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Edit" Size="Size.Medium" />
+                                    </MudTooltip>
+                                    <MudTooltip Content="Delete Question" Class="mr-4">
+                                        <MudFab @onclick="@(async () => await DeleteQuestion(question.ID))" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete" Size="Size.Medium" />
+                                    </MudTooltip>
+                                    <MudTooltip Content="Send Poll" Class="mr-4">
+                                        <MudFab @onclick="@(async () => await SendPoll(question.ID))" Color="Color.Success" StartIcon="@Icons.Material.Filled.Send" Size="Size.Medium" />
+                                    </MudTooltip>
+                                </CardHeaderActions>
+                            </MudCardHeader>
+                            <MudCardContent>
+                                <MudText Align="Align.Center">@question.Question</MudText>
+                                <MudDivider></MudDivider>
+                                @foreach (var option in question.Options)
+                                {
+                                    <MudChip Color="Color.Primary" Variant="Variant.Filled" Class="mr-4">@option.Name</MudChip>
+                                }
+                            </MudCardContent>
+                        </MudCard>
+                    </MudItem>
+                }
+            </MudGrid>
+        </MudCardContent>
+    }
 }
 
 
@@ -180,6 +208,7 @@ else
     private HubConnection? hubConnection;
     Session? session;
 
+    int responses;
 
     public bool IsConnected =>
     hubConnection?.State == HubConnectionState.Connected;
@@ -211,8 +240,8 @@ else
     private async Task AddQuestion()
     {
         var parameters = new DialogParameters();
-        parameters.Add("poll", new Poll() {ID = polls.Count});
-        var options = new DialogOptions() { MaxWidth = MaxWidth.Medium, DisableBackdropClick = true };
+        parameters.Add("poll", new Poll() { ID = polls.Count });
+        var options = new DialogOptions() { FullWidth = true, MaxWidth = MaxWidth.Medium, DisableBackdropClick = true };
         var dialog = DialogService.Show<QuestionDialog>("Add Question", parameters, options);
         var result = await dialog.Result;
 
@@ -228,7 +257,8 @@ else
     {
         var parameters = new DialogParameters();
         parameters.Add("poll", polls.Find(x => x.ID == ID));
-        var options = new DialogOptions() { MaxWidth = MaxWidth.Medium, DisableBackdropClick = true };
+        parameters.Add("IsEdit", true);
+        var options = new DialogOptions() { FullWidth = true, MaxWidth = MaxWidth.Medium, DisableBackdropClick = true };
         var dialog = DialogService.Show<QuestionDialog>("Edit Question", parameters, options);
         var result = await dialog.Result;
 
@@ -252,9 +282,38 @@ else
         //Update the ID of each poll in the list
         for (int i = 0; i < polls.Count; i++)
             polls[i].ID = i;
+    }
+    //Send poll to server
+    private async Task SendPoll(int id)
+    {
+
+        if (hubConnection is not null)
+        {
+            session.activePoll = polls[id];
+            session.State = SessionState.Polling;
+            await hubConnection.SendAsync("SendPoll", polls[id], session.ID);
+            Snackbar.Add("Poll sent", Severity.Success);
+        }
+        else
+        {
+            Snackbar.Add("No connection", Severity.Error);
+        }
+    }
+    //Tell server to end poll
+    private async Task EndPoll()
+    {
+        var result = await DialogService.ShowMessageBox("Warning", "Are you sure you want to end this poll? The results will be saved for this session only.", yesText: "End", cancelText: "Cancel");
+
+        if (result == true)
+        {
+            if (hubConnection is not null)
+            {
+                await hubConnection.SendAsync("EndPoll", session.ID);
+                Snackbar.Add("Poll ended", Severity.Success);
+            }
+        }
 
     }
-
 
     private async void SessionAvaliablity()
     {
@@ -294,6 +353,10 @@ else
             Snackbar.Add(msg, Severity.Normal);
             RecieveSession();
         });
+        hubConnection.On<int>("RecieveVotes", (votes) =>
+        {
+        responses = votes;
+        });
         hubConnection.On<string>("ReceiveMessage", (msg) =>
         {
             Snackbar.Add(msg, Severity.Info);
@@ -332,4 +395,4 @@ else
             await hubConnection.DisposeAsync();
         }
     }
-    }
+}

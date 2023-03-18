@@ -132,6 +132,13 @@ namespace PollAppHosted.Server.Hubs
             foreach (var response in sessions[sessionIndex].activeResponses)
                 count[response.Item2]++;
 
+            int total = 0;
+            //find total count in int[]
+            foreach (int c in count)
+                total += c;
+
+            result.totalVotes = total;
+
             //Set count array to PollResult structure
             for (int i = 0; i < count.Length; i++)
                 result.optionVotes.Add(i, count[i]);
@@ -141,8 +148,11 @@ namespace PollAppHosted.Server.Hubs
 
         public async Task SendPoll(Poll poll, int sessionID)
         {
-            sessions[sessionsDict[sessionID]].activePoll = poll;
-            await Clients.All.SendAsync("ReceivePoll", poll);
+            int id = sessionsDict[sessionID];
+            sessions[id].activePoll = poll;
+            sessions[id].activeResponses = new List<Tuple<string, int>>();
+            sessions[id].State = SessionState.Polling;
+            await Clients.Groups(sessionID.ToString()).SendAsync("ReceivePoll", poll);
 
         }
 
@@ -155,14 +165,13 @@ namespace PollAppHosted.Server.Hubs
             //Check if user is admin
             if (sessions[sessionIndex].users.Exists(x => x.UserID == userID && x.Role == UserStatus.Admin))
             {
-                //Send response to all users for the session
-                await Clients.Group(sessionID.ToString()).SendAsync("ReceiveMessage", "Poll has been ended.");
-
                 //Count all active responses and add to session votes
-                sessions[sessionIndex].PollResults.Add(CountCurrentVotes(sessionID));
+                PollResult pr = CountCurrentVotes(sessionID);
+
+                sessions[sessionIndex].PollResults.Add(pr);
 
                 //Send poll results to all users for the session
-                await Clients.Group(sessionID.ToString()).SendAsync("ReceivePollResults", sessions[sessionIndex].activePoll);
+                await Clients.Group(sessionID.ToString()).SendAsync("ReceivePollResults", pr);
                 //Set active poll to null
                 sessions[sessionIndex].activePoll = null;
             }
@@ -233,8 +242,8 @@ namespace PollAppHosted.Server.Hubs
                         sessions[sessionIndex].activeResponses.Add(new Tuple<string, int>(userID, vote));
                         //Send response to caller
                         await Clients.Caller.SendAsync("ReceiveMessage", $"Your vote has been registered as '{sessions[sessionIndex].activePoll.Options[vote]}'.");
-                        //Send updated poll results to all users for the session
-                        await Clients.Group(sessionID.ToString()).SendAsync("ReceivePollResults", sessions[sessionIndex].activeResponses);
+                        //Send count of responses to session admins
+                        await Clients.Users(sessions[sessionIndex].users.Where(x => x.Role == UserStatus.Admin).Select(x => x.UserID.ToString()).ToArray()).SendAsync("ReceiveVotes", sessions[sessionIndex].activeResponses.Count());
                     }
                     else
                         await Clients.Caller.SendAsync("ReceiveMessage", "You have already selected this reponse.");
