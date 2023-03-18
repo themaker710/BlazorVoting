@@ -10,6 +10,8 @@ namespace PollAppHosted.Shared
 {
     public class Poll
     {
+        public Poll() { Options = new List<PollOption>(); }
+
         private string _question;
         private int _id;
         private DateTime? _endDate;
@@ -20,6 +22,8 @@ namespace PollAppHosted.Shared
         public int ID { get { return _id; } set { _id = value; } }
         public DateTime? EndDate { get { return _endDate; } set { _endDate = value; } }
         public List<PollOption> Options { get { return _options; } set { _options = value; } }
+
+        //public virtual void AddOption(string name) => this.Options.Add(new PollOption { Name = name, ID = Options.Count });
 
         public struct PollOption
         {

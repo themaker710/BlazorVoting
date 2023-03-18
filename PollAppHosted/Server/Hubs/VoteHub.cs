@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.SignalR;
+﻿using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.SignalR;
 using MudBlazor.Extensions;
 using PollAppHosted.Shared;
 using System.ComponentModel.Design;
@@ -10,11 +11,6 @@ namespace PollAppHosted.Server.Hubs
 
         static List<Session> sessions = new List<Session>();
         static Dictionary<int, int> sessionsDict = new Dictionary<int, int>();
-        
-        public async Task SendMessage(string msg)
-        {
-            await Clients.All.SendAsync("ReceiveMessage", msg);
-        }
 
         //Create a new session, setting the caller as the admin.
         public async Task CreateSession(string sessionName, string? username = null)
@@ -61,14 +57,18 @@ namespace PollAppHosted.Server.Hubs
                 await Clients.Users(sessions[sessionIndex].users.Where(x => x.Role == UserStatus.Admin).Select(x => x.UserID.ToString()).ToArray()).SendAsync("ReceiveSession", sessions[sessionIndex], "Session Updated");
             }
         }
-        public async Task SendSessionList()
-        {
-            await Clients.Caller.SendAsync("ReceiveSessions", sessions);
-        }
+
+
+        public async Task SendMessage(string msg) => await Clients.All.SendAsync("ReceiveMessage", msg);
+
+        public async Task SendSessionList() => await Clients.Caller.SendAsync("ReceiveSessions", sessions);
+
+        public async Task PullSession(int sessionID) => await Clients.Caller.SendAsync("ReceiveSession", sessions[sessionsDict[sessionID]], "Session Updated");
 
         public async Task RefreshSession(int sessionID)
         {
-            await Clients.Caller.SendAsync("ReceiveSession", sessions[sessionsDict[sessionID]], "Session Updated");
+              
+            foreach (UserSessionRecord record in sessions[sessionID].users) await Clients.User(record.UserID).SendAsync("RecieveSession", sessions[sessionID]);
         }
 
         //Join a session

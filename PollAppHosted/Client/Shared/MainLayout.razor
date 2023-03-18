@@ -11,8 +11,8 @@
     <MudAppBar Elevation="0">
         <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="@((e) => DrawerToggle())" />
         <MudSpacer />
-        <MudTooltip Text="@((IsConnected) ? "Connected" : "Disconnected")">
-            <MudAvatar Color="@((IsConnected) ? Color.Success : Color.Warning)" Variant="Variant.Filled" Size="Size.Medium">
+        <MudTooltip Text="Click to refresh">
+            <MudAvatar Color="@((IsConnected) ? Color.Success : Color.Warning)" Variant="Variant.Filled" Size="Size.Medium" @onclick="@StateHasChanged">
                 @if (IsConnected)
                 {
                     <MudIcon Color="Color.Dark" Icon="@Icons.Material.Filled.SignalWifi4BarLock" Size="Size.Medium" />
@@ -38,7 +38,7 @@
 </MudLayout>
 
 @code {
-    bool _drawerOpen = true;
+    bool _drawerOpen = true, refreshing = false;
     private HubConnection? hubConnection;
 
     bool IsConnected =>

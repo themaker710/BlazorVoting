@@ -1,0 +1,50 @@
+﻿@using PollAppHosted.Shared;
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@((IsEdit) ? Icons.Material.Outlined.Edit : Icons.Material.Outlined.Add)" Class="mr-3" />@((IsEdit) ? "Edit Question" : "Add Question")
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudTextField @bind-Value="poll.Question" Class="mt-3" Label="Question" Required="true" />
+        <MudDivider DividerType="DividerType.Middle" Class="my-6" />
+        <MudPaper Class="d-flex flex-row">
+            <MudTextField @bind-Value="response" Label="Response" Required="true" />
+            <MudButton Variant="Variant.Filled" Color="Color.Success" OnClick="AddOption"><MudIcon Icon="@Icons.Material.Outlined.AddBox"></MudIcon></MudButton>
+        </MudPaper>
+        <MudList>
+            @foreach (var option in poll.Options)
+            {
+                <MudListItem>
+                        <MudPaper Class="d-flex flex-row">
+                            <MudText>@option.Name</MudText>
+                            <MudSpacer></MudSpacer>
+                            <MudButton Variant="Variant.Filled" Color="Color.Error"  OnClick="() => poll.Options.Remove(option)"><MudIcon Icon="@Icons.Material.Outlined.Delete"></MudIcon></MudButton>
+                        </MudPaper>
+                </MudListItem>
+            }
+        </MudList>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Filled" Color="Color.Success" OnClick="Submit" Class="px-10">Save</MudButton>
+        <MudButton Variant="Variant.Filled" Class="px-10" OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+    </DialogActions>
+</MudDialog>
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+
+    [Parameter] public Poll poll { get; set; }
+    [Parameter] public bool IsEdit { get; set; }
+
+    private string response { get; set; }
+
+    public void AddOption()
+    {
+        poll.Options.Add(new Poll.PollOption { Name = response, ID = poll.Options.Count });
+        response = "";
+    }
+
+    private void Submit() => MudDialog.Close(DialogResult.Ok(poll));
+
+}
