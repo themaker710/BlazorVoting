@@ -6,7 +6,7 @@
 @using PollAppHosted.Client.Components;
 @using PollAppHosted.Shared;
 
-<PageTitle>Admin Dash</PageTitle>
+<PageTitle>Session Manager</PageTitle>
 <MudText Typo="Typo.h3" GutterBottom="true">Session Manager</MudText>
 <MudText Class="mb-8">Prepare questions, view results, and send notifications from this page.</MudText>
 
@@ -56,9 +56,22 @@ else
                 <MudText Typo="Typo.h4" GutterBottom="true">Session Info</MudText>
             </CardHeaderContent>
             <CardHeaderActions>
+                <MudText Class="mb-2">
+                    Last Updated @((lastUpdate == null) ? "Never" : lastUpdate.Value.ToString("hh:mm:ss tt"))
+                </MudText>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" @onclick="@RefreshSession" Class="ml-auto inline">
+                    @if (_refreshingSession)
+                    {
+                        <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                    }
+                    else
+                    {
+                        <MudIcon Icon="@Icons.Material.Filled.Refresh"></MudIcon>
+                    }
+                </MudButton>
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" @onclick="@(async () => SessionAvaliablity())" Class="ml-auto inline">@((session.State == SessionState.Inactive) ? "Activate Session" : "Pause Session")</MudButton>
-                    <MudButton Variant="Variant.Filled" Color="Color.Error" @onclick="@EndConfirmation" Class="ml-auto inline">End Session</MudButton>
-                </CardHeaderActions>
+                <MudButton Variant="Variant.Filled" Color="Color.Error" @onclick="@EndConfirmation" Class="ml-auto inline">End Session</MudButton>
+            </CardHeaderActions>
             </MudCardHeader>
             <MudCardContent>
                 <MudSimpleTable>
@@ -77,7 +90,7 @@ else
                         </tr>
                         <tr>
                             <td>Creation Time</td>
-                            <td>@session.creationTime.ToString("t")</td>
+                            <td>@session.creationTime.ToString("hh:mm:ss tt")</td>
                         </tr>
                         <tr>
                             <td>Session Status</td>
@@ -204,9 +217,11 @@ else
 
     private List<Poll> polls = new List<Poll>();
 
-    bool success, _generatingSession = false, dismissConf = false;
+    bool success, _generatingSession = false, dismissConf = false, _refreshingSession;
     private HubConnection? hubConnection;
     Session? session;
+
+    DateTime? lastUpdate = null;
 
     int responses;
 
@@ -286,6 +301,16 @@ else
     //Send poll to server
     private async Task SendPoll(int id)
     {
+        if(session.State == SessionState.Polling)
+        {
+            Snackbar.Add("A poll is already active", Severity.Error);
+            return;
+        }
+        if(session.State == SessionState.Inactive)
+        {
+            Snackbar.Add("Activate the session before starting a poll", Severity.Error);
+            return;
+        }
 
         if (hubConnection is not null)
         {
@@ -327,8 +352,13 @@ else
         if (session.State != SessionState.Polling)
             Snackbar.Add("Session state changed", Severity.Success);
 
+        RefreshSession();
+    }
+    private async void RefreshSession()
+    {
+        _refreshingSession = true;
         if (hubConnection is not null)
-            await hubConnection.SendAsync("RefreshSession", DirectCode);
+            await hubConnection.SendAsync("PullSession", DirectCode);
     }
 
     protected override async Task OnParametersSetAsync()
@@ -336,6 +366,7 @@ else
         if (DirectCode.ToString().Length == 4)
             if (hubConnection is not null)
                 await hubConnection.SendAsync("PullSession", DirectCode);
+
     }
 
     protected override async Task OnInitializedAsync()
@@ -344,7 +375,7 @@ else
         .WithUrl(Navigation.ToAbsoluteUri("/poll"))
         .Build();
 
-        Snackbar.Add("Connection to poll endpoint established", Severity.Success);
+        //Snackbar.Add("Connection to poll endpoint established", Severity.Success);
 
 
         hubConnection.On<Session, string>("ReceiveSession", (s, msg) =>
@@ -355,7 +386,7 @@ else
         });
         hubConnection.On<int>("RecieveVotes", (votes) =>
         {
-        responses = votes;
+            responses = votes;
         });
         hubConnection.On<string>("ReceiveMessage", (msg) =>
         {
@@ -380,10 +411,18 @@ else
         if (session.IsEmpty)
         {
             Snackbar.Add("Session creation failed", Severity.Error);
-            _generatingSession = false;
+            session = null;
         }
         else
-            _generatingSession = false;
+        {
+            DirectCode = session.ID;
+            Navigation.NavigateTo($"/sessions/{DirectCode}", replace: true);
+        }
+        _generatingSession = false;
+        _refreshingSession = false;
+
+        lastUpdate = DateTime.Now;
+
         StateHasChanged();
     }
 

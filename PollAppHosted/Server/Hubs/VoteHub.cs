@@ -57,7 +57,8 @@ namespace PollAppHosted.Server.Hubs
                 await Clients.Users(sessions[sessionIndex].users.Where(x => x.Role == UserStatus.Admin).Select(x => x.UserID.ToString()).ToArray()).SendAsync("ReceiveSession", sessions[sessionIndex], "Session Updated");
             }
         }
-
+        //Send connection ID to caller
+        public async Task SendConnectionID() => await Clients.Caller.SendAsync("ReceiveID", Context.ConnectionId);
 
         public async Task SendMessage(string msg) => await Clients.All.SendAsync("ReceiveMessage", msg);
 

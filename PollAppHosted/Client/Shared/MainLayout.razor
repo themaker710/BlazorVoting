@@ -11,7 +11,7 @@
     <MudAppBar Elevation="0">
         <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="@((e) => DrawerToggle())" />
         <MudSpacer />
-        <MudTooltip Text="Click to refresh">
+        <MudTooltip Text="Status">
             <MudAvatar Color="@((IsConnected) ? Color.Success : Color.Warning)" Variant="Variant.Filled" Size="Size.Medium" @onclick="@StateHasChanged">
                 @if (IsConnected)
                 {

@@ -4,12 +4,26 @@
 @using Microsoft.AspNetCore.SignalR.Client;
 @using PollAppHosted.Shared;
 
-
+<PageTitle>Admin Dash</PageTitle>
 <MudText Typo="Typo.h3" GutterBottom="true">Admin Dash</MudText>
 <MudText Class="mb-8">Manage sessions and send notifications from this page.</MudText>
 <MudButton @onclick="async () => await RefreshList()">Refresh List</MudButton>
 
 <MudTable Items="@sessions">
+    <ToolBarContent>
+        <MudText Typo="Typo.h6">Session List</MudText>
+        <MudSpacer></MudSpacer>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" @onclick="@RefreshList" Class="ml-auto inline">
+            @if (_refreshList)
+                    {
+                        <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                    }
+                    else
+                    {
+                        <MudIcon Icon="@Icons.Material.Filled.Refresh"></MudIcon>
+                    }
+        </MudButton>
+    </ToolBarContent>
     <HeaderContent>
         <MudTh>Session ID</MudTh>
         <MudTh>Session Name</MudTh>
@@ -55,6 +69,8 @@
     private HubConnection? hubConnection;
     private List<Session> sessions;
 
+    bool _refreshList;
+
     protected override async Task OnInitializedAsync()
     {
         hubConnection = new HubConnectionBuilder()
@@ -65,10 +81,14 @@
         hubConnection.On<List<Session>>("ReceiveSessions", (sess) =>
         {
             sessions = sess;
+            _refreshList = false;
             StateHasChanged();
         });
 
+
         await hubConnection.StartAsync();
+
+        RefreshList();
     }
 
     private async Task ViewSession(Session s)
@@ -83,6 +103,7 @@
 
     private async Task RefreshList()
     {
+        _refreshList = true;
         if (hubConnection is not null)
         {
             await hubConnection.SendAsync("SendSessionList");

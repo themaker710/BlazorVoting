@@ -7,11 +7,12 @@
 @using PollAppHosted.Shared;
 @using PollAppHosted.Client.Components;
 
-<PageTitle>Respond to Polls</PageTitle>
-
+<PageTitle>Polls</PageTitle>
+<MudText>@connid</MudText>
 <MudText Typo="Typo.h3" GutterBottom="true">Voting Hub</MudText>
 <MudText Class="mb-8">Connect to sessions and respond to polls from this page.</MudText>
 <MudDivider />
+
 
 @if (!IsConnected)
 {
@@ -24,6 +25,8 @@
             </MudForm>
         </MudCardContent>
     </MudCard>
+    //Button to get connection id
+    <MudButton @onclick="async () => await GetConnectionId()">Get Connection Id</MudButton>
 }
 else
 {
@@ -144,7 +147,7 @@ else
 
     SessionInfo session = new SessionInfo();
 
-    string uname;
+    string uname, connid;
     int scode;
 
     Poll? activePoll = null;
@@ -178,13 +181,14 @@ else
     {
         if (DirectCode.ToString().Length == 4)
             await DirectConnect();
+
     }
 
     async Task DirectConnect()
     {
-        var parameters = new DialogParameters { ["DirectCode"] = DirectCode };
+        var parameters = new DialogParameters { ["sesscode"] = DirectCode };
 
-        var dialog = DialogService.Show<ConnectionConfirmation_Dialog>("Delete Server", parameters);
+        var dialog = DialogService.Show<ConnectConfDialog>("Connect to Session", parameters);
         var result = await dialog.Result;
 
         if (!result.Cancelled)
@@ -192,6 +196,8 @@ else
             uname = result.Data.ToString();
             await JoinSession();
         }
+
+        scode = DirectCode.Value;
 
     }
     void BeginSession()
@@ -206,7 +212,9 @@ else
 
         connectionTime = new DateTime();
 
-        //Check if there is an active poll
+        Navigation.NavigateTo($"/response/{scode}", replace: true);
+
+        StateHasChanged();
 
     }
 
@@ -229,7 +237,17 @@ else
     {
 
         IsConnected = false;
-        scode = 0;
+
+        //Leave session
+        if (hubConnection is not null)
+            hubConnection.SendAsync("LeaveSession", scode);
+
+
+
+        //Clear the session
+        session = null;
+
+        Navigation.NavigateTo("/response");
     }
 
     protected override async Task OnInitializedAsync()
@@ -270,8 +288,20 @@ else
             Snackbar.Add("Session master closed the session.", Severity.Info);
             IsConnected = false;
         });
+        hubConnection.On<string>("ReceiveID", (id) =>
+        {
+            connid = id;
+            Console.WriteLine(id);
+            StateHasChanged();
+        });
 
         await hubConnection.StartAsync();
+
+
+    }
+    public async Task GetConnectionId()
+    {
+        await hubConnection.SendAsync("SendConnectionID");
     }
 
     private async Task JoinSession()
