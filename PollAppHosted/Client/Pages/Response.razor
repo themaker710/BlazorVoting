@@ -235,17 +235,14 @@ else
 
     void LeaveSession()
     {
-
         IsConnected = false;
 
         //Leave session
         if (hubConnection is not null)
             hubConnection.SendAsync("LeaveSession", scode);
 
-
-
         //Clear the session
-        session = null;
+        session = new SessionInfo();
 
         Navigation.NavigateTo("/response");
     }
@@ -255,6 +252,7 @@ else
         hubConnection = new HubConnectionBuilder()
             .WithUrl(Navigation.ToAbsoluteUri("/poll"))
             .Build();
+
         //Add all recieving methods here
         hubConnection.On<string>("ReceiveMessage", (msg) =>
         {
@@ -296,7 +294,6 @@ else
         });
 
         await hubConnection.StartAsync();
-
 
     }
     public async Task GetConnectionId()

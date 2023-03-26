@@ -30,11 +30,11 @@ namespace PollAppHosted.Server.Hubs
 
             //Create new session
             Session newSession = new() { ID = sessionID, Name = sessionName, State = SessionState.Inactive, creationTime = DateTime.Now, users = new List<UserSessionRecord>(), PollResults = new List<PollResult>()};
-            newSession.users.Add(new UserSessionRecord { UserID = userID, UserName = username, joinTime = DateTime.Now, Role = UserStatus.Admin });
+            newSession.users.Add(new UserSessionRecord { UserID = userID, UserName = (string.IsNullOrWhiteSpace(username) ? "Creator" : username), joinTime = DateTime.Now, Role = UserStatus.Admin });
             sessions.Add(newSession);
             UpdateSessions();
             //Add user to session group
-            await Groups.AddToGroupAsync(Context.ConnectionId, newSession.ID.ToString());
+            await Groups.AddToGroupAsync(Context.ConnectionId, newSession.ID.ToString()).WaitAsync(new TimeSpan(-1));
             //Send caller session ID
             await Clients.Caller.SendAsync("ReceiveSession", newSession, $"Session succesfully created with code {newSession.ID}");
         }
@@ -52,7 +52,7 @@ namespace PollAppHosted.Server.Hubs
                 //Remove user from session
                 sessions[sessionIndex].users.RemoveAll(x => x.UserID == userID);
                 //Remove user from session group
-                await Groups.RemoveFromGroupAsync(Context.ConnectionId, sessionID.ToString());
+                await Groups.RemoveFromGroupAsync(Context.ConnectionId, sessionID.ToString()).WaitAsync(new TimeSpan(-1));
                 //Send updated session to all admins for the session
                 await Clients.Users(sessions[sessionIndex].users.Where(x => x.Role == UserStatus.Admin).Select(x => x.UserID.ToString()).ToArray()).SendAsync("ReceiveSession", sessions[sessionIndex], "Session Updated");
             }
@@ -103,7 +103,14 @@ namespace PollAppHosted.Server.Hubs
             {
                 //Add user to session and group
                 await Groups.AddToGroupAsync(Context.ConnectionId, sessionID.ToString());
-                sessions[sessionIndex].users.Add(new UserSessionRecord { UserID = userID, UserName = username, joinTime = DateTime.Now, Role = UserStatus.Voter });
+
+                string uname;
+                if (string.IsNullOrWhiteSpace(username))
+                    uname = "User " + sessions[sessionIndex].users.Count;
+                else
+                    uname = username;
+
+                sessions[sessionIndex].users.Add(new UserSessionRecord { UserID = userID, UserName = uname, joinTime = DateTime.Now, Role = UserStatus.Voter });
             }
 
             //Send updated session to all admins for the session
@@ -111,6 +118,7 @@ namespace PollAppHosted.Server.Hubs
 
             //Send response to caller
             await Clients.Caller.SendAsync("ReceiveSession", sessions[sessionIndex], "Session connection successful");
+            Console.WriteLine("got here");
         }
         
         public void UpdateSessions()
@@ -154,7 +162,31 @@ namespace PollAppHosted.Server.Hubs
             sessions[id].activeResponses = new List<Tuple<string, int>>();
             sessions[id].State = SessionState.Polling;
             await Clients.Groups(sessionID.ToString()).SendAsync("ReceivePoll", poll);
+            //Are groups working?
+        }
+        public async Task UpdateState(SessionState state, int sessionID)
+        {
+            int id = sessionsDict[sessionID];
+            sessions[id].State = state;
+            await Clients.Groups(sessionID.ToString()).SendAsync("ReceiveSession", sessions[id].Name, "State Updated");
 
+        }
+
+        public async Task UpdateUsers(List<UserSessionRecord> users, int sessionID)
+        {
+            int id = sessionsDict[sessionID];
+
+            //Combine the local list and the users paramater, giving duplicate priority to the parameter
+            foreach (UserSessionRecord user in users)
+            {
+                if (sessions[id].users.Exists(x => x.UserID == user.UserID))
+                {
+                    sessions[id].users.RemoveAll(x => x.UserID == user.UserID);
+                }
+                sessions[id].users.Add(user);
+            }
+
+            await Clients.Groups(sessionID.ToString()).SendAsync("ReceiveSession", sessions[id]);
         }
 
         public async Task EndPoll(int sessionID)
@@ -171,10 +203,13 @@ namespace PollAppHosted.Server.Hubs
 
                 sessions[sessionIndex].PollResults.Add(pr);
 
-                //Send poll results to all users for the session
-                await Clients.Group(sessionID.ToString()).SendAsync("ReceivePollResults", pr);
-                //Set active poll to null
                 sessions[sessionIndex].activePoll = null;
+                sessions[sessionIndex].State = SessionState.Idle;
+
+                //Send poll results to all users for the session
+                await Clients.Group(sessionID.ToString()).SendAsync("ReceivePollResults", pr, sessions[sessionIndex]);
+                //Set active poll to null
+
             }
             else
                 await Clients.Caller.SendAsync("ReceiveMessage", "You do not have the neccessary permissions to do that!");
@@ -254,6 +289,21 @@ namespace PollAppHosted.Server.Hubs
             }
             else
                 await Clients.Caller.SendAsync("ReceiveMessage", "You are not registered for this session.");
+        }
+
+        public override Task OnDisconnectedAsync(Exception? exception)
+        {
+            //Remove user from all groups
+            foreach (var session in sessions)
+            {
+                if (session.users.Exists(x => x.UserID == Context.ConnectionId))
+                {
+                    session.users.RemoveAll(x => x.UserID == Context.ConnectionId);
+                    Groups.RemoveFromGroupAsync(Context.ConnectionId, session.ID.ToString()).Wait(new TimeSpan(-1));
+                }
+            }
+
+            return base.OnDisconnectedAsync(exception);
         }
     }
 }

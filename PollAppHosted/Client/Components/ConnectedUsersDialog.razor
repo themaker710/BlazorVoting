@@ -1,0 +1,50 @@
+﻿@using PollAppHosted.Shared;
+<MudDialog DisableSidePadding="true">
+    <DialogContent>
+        <MudContainer Style="max-height: 300px; overflow-y: scroll">
+            @foreach (UserSessionRecord user in users)
+            {
+                <MudListItem>
+                    <MudTooltip Text="@("Joined " + user.joinTime.ToString("hh:mm:ss tt"))"></MudTooltip>
+                    <MudPaper Class="d-flex flex-row ml-2">
+                        <MudText>@(user.UserName)</MudText>
+                        <MudSpacer></MudSpacer>
+                        @if (user.Role != UserStatus.Admin)
+                        {
+                            <MudButton Variant="Variant.Filled" Color="Color.Error" OnClick="() => users.Remove(user)"><MudIcon Icon="@Icons.Material.Outlined.Delete"></MudIcon></MudButton>
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => MakeAdmin(user))"><MudIcon Icon="@Icons.Material.Outlined.AdminPanelSettings"></MudIcon></MudButton>
+                        }
+                        else
+                        {
+                            <MudChip Color="Color.Primary">@user.Role</MudChip>
+                        }
+                    </MudPaper>
+                </MudListItem>
+            }
+        </MudContainer>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Color="Color.Primary" @onclick="@(() => MudDialog.Cancel())">Close</MudButton>
+        <MudButton Color="Color.Error" @onclick="@(() => MudDialog.Close(users))">Submit Changes</MudButton>
+    </DialogActions>
+</MudDialog>
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+
+    [Parameter] public Session sess { get; set; }
+
+    List<UserSessionRecord> users = new List<UserSessionRecord>();
+
+    protected override void OnInitialized()
+    {
+        users = sess.users;
+    }
+
+    public void MakeAdmin(UserSessionRecord user)
+    {
+        users.Remove(user);
+        user.Role = UserStatus.Admin;
+        users.Add(user);
+    }
+
+}
